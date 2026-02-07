@@ -1,2 +1,5 @@
 require "bundler/gem_tasks"
-task :default => :spec
+require "minitest/test_task"
+
+Minitest::TestTask.new(:test)
+task default: :test
