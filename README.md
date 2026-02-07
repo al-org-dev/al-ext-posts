@@ -31,7 +31,11 @@ plugins:
 external_sources:
   - name: "My Blog"
     rss_url: "https://myblog.com/feed.xml"
+    categories: ["external", "blog"]
+    tags: ["rss", "updates"]
   - name: "Another Source"
+    categories: ["external"]
+    tags: ["manual-curation"]
     posts:
       - url: "https://example.com/post1"
         published_date: "2024-03-20"
@@ -42,6 +46,10 @@ external_sources:
 The plugin supports two types of sources:
 - RSS feeds: Provide the `rss_url` parameter
 - Direct URLs: Provide a list of `posts` with `url` and `published_date`
+
+Optional per-source defaults:
+- `categories`: array of categories automatically applied to imported posts
+- `tags`: array of tags automatically applied to imported posts
 
 ## Development
 
