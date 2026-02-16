@@ -44,10 +44,12 @@ external_sources:
 ```
 
 The plugin supports two types of sources:
+
 - RSS feeds: Provide the `rss_url` parameter
 - Direct URLs: Provide a list of `posts` with `url` and `published_date`
 
 Optional per-source defaults:
+
 - `categories`: array of categories automatically applied to imported posts
 - `tags`: array of tags automatically applied to imported posts
 
