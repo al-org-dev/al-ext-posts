@@ -42,7 +42,7 @@ module AlExtPosts
           content: e.content,
           summary: e.summary,
           published: e.published
-        }, src)
+        }, metadata_for_post(src, e))
       end
     end
 
@@ -85,7 +85,24 @@ module AlExtPosts
         puts "...fetching #{post['url']}"
         content = fetch_content_from_url(post['url'])
         content[:published] = parse_published_date(post['published_date'])
-        create_document(site, src['name'], post['url'], content, src)
+        create_document(site, src['name'], post['url'], content, metadata_for_post(src, post))
+      end
+    end
+
+    def metadata_for_post(src, post)
+      metadata = src.dup
+      %w[categories tags].each do |key|
+        value = metadata_value(post, key)
+        metadata[key] = value if value && !(value.respond_to?(:empty?) && value.empty?)
+      end
+      metadata
+    end
+
+    def metadata_value(post, key)
+      if post.respond_to?(:key?)
+        post[key] || post[key.to_sym]
+      elsif post.respond_to?(key)
+        post.public_send(key)
       end
     end
 
