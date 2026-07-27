@@ -3,11 +3,19 @@ require 'httparty'
 require 'jekyll'
 require 'nokogiri'
 require 'time'
+require 'uri'
 
 module AlExtPosts
   class ExternalPostsGenerator < Jekyll::Generator
     safe true
     priority :high
+
+    # Extensions dropped from a URL segment before it is turned into a title,
+    # so `.../my-post.html` reads as "My Post" rather than "My Post Html".
+    PAGE_EXTENSIONS = %w[html htm xhtml shtml php asp aspx jsp cfm md markdown txt].freeze
+
+    # Last-resort title for a URL with neither a usable path nor a host.
+    FALLBACK_TITLE = 'External post'.freeze
 
     def generate(site)
       if site.config['external_sources'] != nil
@@ -47,14 +55,17 @@ module AlExtPosts
     end
 
     def create_document(site, source_name, url, content, src = {})
+      # The slug is still derived from the raw title so existing post URLs keep
+      # their source-name fallback; only the published title is filled in.
       slug = build_slug(source_name, url, content[:title])
+      title = resolve_title(content[:title], url)
 
       path = site.in_source_dir("_posts/#{slug}.md")
       doc = Jekyll::Document.new(
         path, { :site => site, :collection => site.collections['posts'] }
       )
       doc.data['external_source'] = source_name
-      doc.data['title'] = content[:title]
+      doc.data['title'] = title
       doc.data['feed_content'] = content[:content]
       doc.data['description'] = content[:summary]
       doc.data['date'] = content[:published]
@@ -97,6 +108,90 @@ module AlExtPosts
     # intermediate string and the second regexp scan.
     def slugify(value)
       value.to_s.downcase.strip.gsub(/[^\w -]/, '').tr(' ', '-')
+    end
+
+    # Title to publish for an ingested item. Fetches degrade in ways that leave
+    # no title at all (an unreachable host, a page without <title>, an RSS item
+    # with a blank one), and publishing that empty string produced a blank but
+    # clickable row in the blog index plus a stream of Jekyll "Empty `slug`
+    # generated" warnings. The source is listed in _config.yml by the user, so
+    # the entry is kept: derive a readable title from the URL and warn that the
+    # fetch degraded.
+    def resolve_title(title, url)
+      return title if title.to_s.match?(/[[:word:]]/)
+
+      derived = title_from_url(url)
+      Jekyll.logger.warn('ExternalPosts:', "No title found for #{url} - using #{derived.inspect} derived from the URL.")
+      derived
+    end
+
+    # Turn the last meaningful path segment of a URL into a human-readable
+    # title: "https://blog.google/technology/ai/gemini-update-2024/" becomes
+    # "Gemini Update 2024". Trailing slashes, query strings and fragments are
+    # ignored, percent-escapes are decoded, and a page extension is dropped.
+    # Segments carrying no letters on their own (ids, /2024/05/ date parts) are
+    # skipped in favour of an earlier one, and a URL left with no wordy segment
+    # at all - a bare domain, an all-numeric path - falls back to its host.
+    # Never raises and never returns an empty string.
+    def title_from_url(url)
+      segments = url_path_segments(url)
+      segments[-1] = strip_page_extension(segments[-1]) unless segments.empty?
+
+      title = humanize_segment(segments.reverse.find { |segment| segment.match?(/[[:alpha:]]/) })
+      return title unless title.empty?
+
+      host = url_host(url)
+      host.empty? ? FALLBACK_TITLE : host
+    end
+
+    # Path segments of a URL, percent-decoded and stripped of blanks. Falls
+    # back to trimming the query/fragment by hand for inputs URI cannot parse.
+    def url_path_segments(url)
+      path = begin
+        URI.parse(url.to_s).path.to_s
+      rescue URI::Error
+        url.to_s.scrub('').split('#', 2).first.to_s.split('?', 2).first.to_s
+      end
+
+      path.split('/').map { |segment| decode_url_segment(segment) }.reject { |segment| segment.strip.empty? }
+    end
+
+    # Host of a URL, without a leading "www.". Empty when there is none.
+    def url_host(url)
+      host = begin
+        URI.parse(url.to_s).host
+      rescue URI::Error
+        nil
+      end
+
+      host.to_s.sub(/\Awww\./i, '')
+    end
+
+    # Percent-decode a single URL segment, keeping the raw text whenever the
+    # escapes are malformed or decode to invalid bytes. Scrubbed either way so
+    # the callers below can match against it without raising.
+    def decode_url_segment(segment)
+      decoded = URI.decode_www_form_component(segment)
+      (decoded.valid_encoding? ? decoded : segment).scrub('')
+    rescue ArgumentError
+      segment.scrub('')
+    end
+
+    # Drop a trailing web-page extension, keeping the segment untouched when
+    # the extension is unknown (a version number, say) or is all there is.
+    def strip_page_extension(segment)
+      extension = File.extname(segment)
+      return segment unless PAGE_EXTENSIONS.include?(extension.delete_prefix('.').downcase)
+
+      stripped = segment.chomp(extension)
+      stripped.empty? ? segment : stripped
+    end
+
+    # Split a URL segment on its separators and capitalize each word, leaving
+    # words that are already cased alone: "google-gemini-io-2024" becomes
+    # "Google Gemini Io 2024".
+    def humanize_segment(segment)
+      segment.to_s.gsub(/[^[:alnum:]]+/, ' ').split.map { |word| word.sub(/\A[[:lower:]]/, &:upcase) }.join(' ')
     end
 
     def fetch_from_urls(site, src)
