@@ -47,15 +47,7 @@ module AlExtPosts
     end
 
     def create_document(site, source_name, url, content, src = {})
-      # check if title is composed only of whitespace or foreign characters
-      if content[:title].gsub(/[^\w]/, '').strip.empty?
-        # use the source name and last url segment as fallback
-        slug = "#{source_name.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')}-#{url.split('/').last}"
-      else
-        # parse title from the post or use the source name and last url segment as fallback
-        slug = content[:title].downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
-        slug = "#{source_name.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')}-#{url.split('/').last}" if slug.empty?
-      end
+      slug = build_slug(source_name, url, content[:title])
 
       path = site.in_source_dir("_posts/#{slug}.md")
       doc = Jekyll::Document.new(
@@ -78,6 +70,19 @@ module AlExtPosts
 
       doc.content = content[:content]
       site.collections['posts'].docs << doc
+    end
+
+    # Build a filesystem-safe post slug from the title, falling back to the
+    # source name + last URL segment when the title is missing, blank, or made
+    # up entirely of non-word characters. Guards against a nil title (e.g. an
+    # RSS entry or fetched page with no <title>), which previously raised a
+    # NoMethodError and aborted the whole build.
+    def build_slug(source_name, url, title)
+      fallback = "#{source_name.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')}-#{url.split('/').last}"
+      return fallback if title.to_s.gsub(/[^\w]/, '').strip.empty?
+
+      slug = title.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
+      slug.empty? ? fallback : slug
     end
 
     def fetch_from_urls(site, src)
@@ -121,7 +126,7 @@ module AlExtPosts
       html = HTTParty.get(url).body
       parsed_html = Nokogiri::HTML(html)
 
-      title = parsed_html.at('head title')&.text.strip || ''
+      title = parsed_html.at('head title')&.text&.strip || ''
 
       description = parsed_html.at('head meta[name="description"]')&.attr('content')
       description ||= parsed_html.at('head meta[name="og:description"]')&.attr('content')

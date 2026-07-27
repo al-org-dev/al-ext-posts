@@ -127,4 +127,39 @@ class AlExtPostsGeneratorTest < Minitest::Test
       end
     end
   end
+
+  def test_fetch_content_from_url_handles_missing_title
+    html = <<~HTML
+      <html>
+        <body>
+          <p>Only a body, no head/title.</p>
+        </body>
+      </html>
+    HTML
+
+    with_singleton_method_stub(HTTParty, :get, ->(*) { OpenStruct.new(body: html) }) do
+      content = @generator.fetch_content_from_url('https://example.com/no-title')
+
+      assert_equal '', content[:title]
+      assert_equal 'Only a body, no head/title.', content[:content]
+    end
+  end
+
+  def test_build_slug_from_normal_title
+    slug = @generator.build_slug('Example Source', 'https://example.com/a-post', 'Hello, World!')
+
+    assert_equal 'hello-world', slug
+  end
+
+  def test_build_slug_falls_back_when_title_is_nil
+    slug = @generator.build_slug('Example Source', 'https://example.com/some-post', nil)
+
+    assert_equal 'example-source-some-post', slug
+  end
+
+  def test_build_slug_falls_back_when_title_has_no_word_characters
+    slug = @generator.build_slug('Example Source', 'https://example.com/entry-42', '!!!')
+
+    assert_equal 'example-source-entry-42', slug
+  end
 end
