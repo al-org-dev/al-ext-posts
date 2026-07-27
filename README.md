@@ -38,6 +38,8 @@ Supported source types:
 - RSS feeds (`rss_url`)
 - Manual URL entries (`posts` with `url` + `published_date`)
 
+When a fetch degrades and an entry arrives without a usable title, the title is derived from the last meaningful segment of its URL and a warning naming that URL is logged, so the entry stays readable in the post listing instead of rendering as a blank row.
+
 ## Ecosystem context
 
 - Starter demo content/wiring lives in `al-folio`.
