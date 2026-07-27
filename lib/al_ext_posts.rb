@@ -78,11 +78,25 @@ module AlExtPosts
     # RSS entry or fetched page with no <title>), which previously raised a
     # NoMethodError and aborted the whole build.
     def build_slug(source_name, url, title)
-      fallback = "#{source_name.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')}-#{url.split('/').last}"
-      return fallback if title.to_s.gsub(/[^\w]/, '').strip.empty?
+      return fallback_slug(source_name, url) unless title.to_s.match?(/\w/)
 
-      slug = title.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
-      slug.empty? ? fallback : slug
+      slug = slugify(title)
+      slug.empty? ? fallback_slug(source_name, url) : slug
+    end
+
+    # Fallback slug built from the source name and the last URL segment. Only
+    # computed on the fallback path so the common (titled) case does no extra
+    # string work.
+    def fallback_slug(source_name, url)
+      "#{slugify(source_name)}-#{url.split('/').last}"
+    end
+
+    # Drop every character that is not a word character, space, or hyphen in a
+    # single pass, then translate the remaining spaces to hyphens. Equivalent to
+    # the previous `gsub(' ', '-').gsub(/[^\w-]/, '')` pair, but avoids the
+    # intermediate string and the second regexp scan.
+    def slugify(value)
+      value.to_s.downcase.strip.gsub(/[^\w -]/, '').tr(' ', '-')
     end
 
     def fetch_from_urls(site, src)

@@ -162,4 +162,38 @@ class AlExtPostsGeneratorTest < Minitest::Test
 
     assert_equal 'example-source-entry-42', slug
   end
+
+  def test_build_slug_drops_punctuation_and_keeps_hyphens
+    slug = @generator.build_slug('Example Source', 'https://example.com/x', 'Weekly Update: Part-2 (final)!')
+
+    assert_equal 'weekly-update-part-2-final', slug
+  end
+
+  def test_build_slug_sanitizes_source_name_in_fallback
+    slug = @generator.build_slug("Maruan's Blog!", 'https://example.com/posts/entry-7', nil)
+
+    assert_equal 'maruans-blog-entry-7', slug
+  end
+
+  def test_build_slug_falls_back_for_title_without_ascii_word_characters
+    slug = @generator.build_slug('Example Source', 'https://example.com/post-9', '你好世界')
+
+    assert_equal 'example-source-post-9', slug
+  end
+
+  def test_slugify_matches_previous_two_pass_behavior
+    [
+      'Hello, World!',
+      '  Leading and trailing  ',
+      'Tabs\tand\nnewlines',
+      'already-hyphenated',
+      'Ünïcödé tïtlé',
+      'multiple   spaces',
+      'Example Source'
+    ].each do |value|
+      legacy = value.downcase.strip.gsub(' ', '-').gsub(/[^\w-]/, '')
+
+      assert_equal legacy, @generator.slugify(value), "slugify diverged for #{value.inspect}"
+    end
+  end
 end
